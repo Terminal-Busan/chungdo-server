@@ -49,6 +49,51 @@ class AIUnavailable(Exception):
     pass
 
 
+def provider_schema(schema: type[BaseModel]) -> dict:
+    """Translate unsupported wire constraints; full Pydantic validation stays mandatory."""
+    constraints = {
+        "minItems",
+        "maxItems",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+    }
+
+    def convert(value):
+        if isinstance(value, list):
+            return [convert(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        translated = {
+            key: convert(item) for key, item in value.items() if key not in constraints
+        }
+        limits = {key: value[key] for key in constraints if key in value}
+        if limits:
+            translated["description"] = (
+                value.get("description", "")
+                + " Server-enforced constraints: "
+                + json.dumps(limits, ensure_ascii=False)
+            ).strip()
+        if translated.get("type") == "object" and "properties" in translated:
+            translated["required"] = list(translated["properties"])
+        return translated
+
+    return convert(schema.model_json_schema())
+
+
+async def default_gpt_model(client):
+    models = await client.list_models()
+    available = [model.id for model in models if model.id.startswith("gpt-")]
+    if not available:
+        raise AIUnavailable("사용 가능한 GPT 모델이 없습니다")
+    # Use the account's current catalog instead of assuming a retired model ID.
+    return available[0]
+
+
 class CopilotService:
     async def generate(
         self, agent: str, context: dict, schema: type[BaseModel], tools=None
@@ -89,7 +134,7 @@ class CopilotService:
                     )
                     async with client:
                         session = await client.create_session(
-                            model=model,
+                            model=model or await default_gpt_model(client),
                             tools=tools or [],
                             available_tools=[tool.name for tool in tools or []],
                             on_permission_request=deny_permission,
@@ -109,7 +154,7 @@ class CopilotService:
                             for attempt in range(2):
                                 response = await session.send_and_wait(
                                     prompt if attempt == 0 else JSON_RETRY,
-                                    response_schema=schema,
+                                    response_schema=provider_schema(schema),
                                     timeout=40,
                                 )
                                 try:
