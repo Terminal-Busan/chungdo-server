@@ -1,0 +1,29 @@
+[
+  {
+    "id": "demo-rejected-housing",
+    "name": "[데모] 청년 주거 지원",
+    "field": "주거·자립", "agency": "데모 기관", "region": null,
+    "purpose_summary": "실제 정부 정책이 아닌 테스트 전용 데이터입니다.",
+    "criteria_text": "데모: 연령 및 지원조건 코드 비교를 체험합니다.",
+    "conditions": {"JA0110": 19, "JA0111": 34, "JA0201": "Y", "JA0404": "Y"},
+    "is_demo": true
+  },
+  {
+    "id": "demo-alternative-housing",
+    "name": "[데모] 주거 상담 지원",
+    "field": "주거·자립", "agency": "데모 기관", "region": null,
+    "purpose_summary": "실제 신청할 수 없는 데모 정책입니다.",
+    "criteria_text": "데모 데이터의 세부 선정기준 확인 필요",
+    "conditions": {"JA0110": 19, "JA0111": 39, "JA0201": "Y", "JA0202": "Y", "JA0203": "Y", "JA0404": "Y"},
+    "apply_method": "데모이므로 실제 신청처가 없습니다.",
+    "is_demo": true
+  },
+  {
+    "id": "demo-alternative-employment",
+    "name": "[데모] 취업 상담 지원",
+    "field": "고용·창업", "agency": "데모 기관", "region": null,
+    "purpose_summary": "실제 신청할 수 없는 데모 정책입니다.",
+    "conditions": {"JA0110": 19, "JA0111": 39},
+    "is_demo": true
+  }
+]

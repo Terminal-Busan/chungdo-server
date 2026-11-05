@@ -7,3 +7,4 @@ sqlalchemy[asyncio]==2.0.57
 aiosqlite==0.22.1
 httpx==0.28.1
 certifi==2026.10.23
+python-dotenv==1.2.4
