@@ -5,13 +5,45 @@ name: Test and deploy FastAPI app to Azure Web App - chungdo-server-dev
 
 on:
   workflow_dispatch:
+    inputs:
+      verify_ai_only:
+        description: 'Copilot 실제 호출만 확인 (서버 배포 없음)'
+        type: boolean
+        default: false
 
 concurrency:
   group: chungdo-server-dev
   cancel-in-progress: false
 
 jobs:
+  verify-ai:
+    # A work branch must never deploy while testing a new secret.
+    if: inputs.verify_ai_only || github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Prepare Copilot runtime
+        run: |
+          python -m pip install -r requirements.txt
+          python -m copilot download-runtime
+      - name: Verify real AI response without deployment
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
+        run: |
+          python -m app.copilot_setup check
+          printf '%s\n' 'Copilot 실제 호출 확인 완료 (배포 없음)' >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    if: github.ref == 'refs/heads/main' && !inputs.verify_ai_only
     runs-on: ubuntu-latest
     services:
       postgres:
