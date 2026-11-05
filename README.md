@@ -148,7 +148,7 @@ Actions의 기존 배포 워크플로에서 `verify_ai_only`를 선택하면 서
 
 배포 워크플로가 토큰을 Azure App Service 환경변수로 전달합니다. GitHub secret이 비어 있으면 Azure에 이미 등록된 `COPILOT_GITHUB_TOKEN` 또는 `GITHUB_TOKEN`을 유지하며, 양쪽 모두 없으면 배포 설정 변경 전에 중단합니다. 서버 시작 명령은 SDK 런타임 준비 → `python -m app.copilot_setup check`로 실제 모델 응답 확인 → API 실행 순서입니다. 인증·모델·네트워크 오류가 있으면 API 시작과 배포 검증이 실패하므로 단순 health 성공을 AI 연결 성공으로 오인하지 않습니다. 이 시작 점검은 서버 재시작마다 짧은 모델 요청 1회를 사용합니다. 서버 실행 중 외부 AI 장애에는 기존 규칙 기반 폴백을 유지합니다.
 
-서버에 `COPILOT_GITHUB_TOKEN`(또는 `GITHUB_TOKEN`)과 `COPILOT_MODEL`을 설정합니다. 모델 이름은 계정에서 사용 가능한 모델로 지정하세요. MAF나 별도 AI 서버를 추가하지 않고 설치된 Copilot SDK를 직접 호출합니다. 에이전트 도구는 현재 분석의 정책 캐시 조회·규칙 판정만 허용하고, 기본 파일·셸·외부 쓰기 도구는 노출하지 않습니다. AI는 사유·추천 이유·행동·경로의 구조화된 JSON을 반환하며, 서버가 판정값·출처·후보ID·서류·신청방법·순서를 검증하고 교정합니다.
+서버에 `COPILOT_GITHUB_TOKEN`(또는 `GITHUB_TOKEN`)을 설정합니다. `COPILOT_MODEL`은 선택 사항이며 비워 두면 계정의 모델 목록에서 사용 가능한 GPT 모델을 선택합니다. MAF나 별도 AI 서버를 추가하지 않고 설치된 Copilot SDK를 직접 호출합니다. 에이전트 도구는 현재 분석의 정책 캐시 조회·규칙 판정만 허용하고, 기본 파일·셸·외부 쓰기 도구는 노출하지 않습니다. AI는 사유·추천 이유·행동·경로의 구조화된 JSON을 반환하며, 서버가 판정값·출처·후보ID·서류·신청방법·순서를 검증하고 교정합니다.
 
 모델 출력은 Pydantic으로 검증하고 JSON 오류 시 1회 재시도합니다. 에이전트 단계마다 DB 검색·도구 처리·모델 호출을 포함해 45초 제한을 적용하고, 초과 시 SSE `error`와 안전한 폴백을 제공한 뒤 다음 단계로 진행합니다. 검증되지 않은 모델 토큰과 내부 추론은 클라이언트에 내보내지 않으며, 검증된 사유 설명을 `token` 이벤트로 전달합니다. AI 미사용 폴백은 `ai_generated: false`로 구분합니다.
 
@@ -179,4 +179,6 @@ python -m pip check
 
 기본 `main:app`은 합의한 세 모듈(`app/policies`, `app/guidance`, `app/navigations`)과 에이전트 인스트럭션을 사용합니다. 팀원이 추가한 `welfare/` 구현과 테스트는 변경 없이 보존했으며 별도 앱 팩토리 `welfare.api:create_app`으로 실행할 수 있습니다. 두 앱을 같은 포트에 중복 등록하지 않습니다. 기본 앱은 위의 DB 초기화 절차가 필요합니다. `welfare/`의 SQLite 자동 생성·실행 임대 기능은 해당 팩토리의 기능입니다.
 
-양쪽 의존성과 배포 패키지를 포함하고 CI에서 `TEST_DATABASE_URL`, `PG_TEST_URL`을 모두 설정합니다. 팀원의 PostgreSQL 인증서 검증 설정을 기본 앱에도 반영했고, `GOV24_SERVICE_KEY`도 `GOV24_API_KEY`의 별칭으로 지원합니다. `COPILOT_ENABLED=true`이면 로컬 Copilot 로그인을 허용하고 모델명을 비우면 SDK 기본 모델을 사용합니다. 실제 배포·외부 AI 인증 검증은 별도입니다.
+양쪽 의존성과 배포 패키지를 포함하고 CI에서 `TEST_DATABASE_URL`, `PG_TEST_URL`을 모두 설정합니다. 팀원의 PostgreSQL 인증서 검증 설정을 기본 앱에도 반영했고, `GOV24_SERVICE_KEY`도 `GOV24_API_KEY`의 별칭으로 지원합니다. `COPILOT_ENABLED=true`이면 로컬 Copilot 로그인을 허용하고 기본 앱에서 모델명을 비우면 계정에서 사용 가능한 GPT 모델을 선택합니다. 실제 배포·외부 AI 인증 검증은 별도입니다.
+
+Copilot 모델의 구조화 출력 제약에 맞춰 전송용 JSON 스키마의 길이·범위 제한은 설명에 기록합니다. 원래 Pydantic DTO와 서버 검증은 유지하며, 응답이 제한을 어기면 기존과 동일하게 1회 재시도 후 실패 처리합니다.
