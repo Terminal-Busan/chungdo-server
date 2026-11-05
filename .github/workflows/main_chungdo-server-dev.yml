@@ -57,6 +57,14 @@ jobs:
           python -m app.copilot_setup check
           python -m pytest tests/test_welfare.py -q -k live_copilot
           printf '%s\n' '실제 Copilot 3개 에이전트·후속 질문·SSE·삭제 확인 완료 (격리된 테스트 DB·데모 정책, 배포 없음)' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify official Gov24 endpoints
+        if: always()
+        env:
+          GOV24_API_KEY: ${{ secrets.GOV24_API_KEY }}
+          GOV24_SERVICE_KEY: ${{ secrets.GOV24_SERVICE_KEY }}
+          WELFARE_RUN_LIVE_GOV24: 'true'
+        run: |
+          python -m pytest tests/test_gov24.py -q -k live_gov24
 
   build:
     if: github.ref == 'refs/heads/main' && !inputs.verify_ai_only
