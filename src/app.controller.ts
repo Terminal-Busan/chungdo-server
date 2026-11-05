@@ -9,4 +9,10 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
+
+  @Get('health/ready')
+  async getReadiness() {
+    await this.appService.checkDatabase();
+    return { status: 'ok' };
+  }
 }

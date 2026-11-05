@@ -57,18 +57,13 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
-## Deployment
+## Azure 데모 배포
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+GitHub Actions 탭에서 **Run workflow**를 누르면 빌드하고 테스트한 API를 기존 `chungdo-server-dev` App Service에 배포합니다.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+- 기존 Azure OIDC 시크릿과 연동된 Linux App Service에 Node.js 24를 선택합니다. 시작 명령을 지정하는 경우 `npm start`를 사용합니다. 빌드가 끝난 ZIP을 배포하므로 App Service의 배포 시 빌드는 끕니다.
+- App Service의 환경 변수에 기존 PostgreSQL의 `DATABASE_URL`을 등록합니다. Azure PostgreSQL의 연결 문자열에는 `sslmode=verify-full`을 사용하고 App Service에서 DB에 접근할 수 있도록 네트워크를 구성합니다.
+- Actions 실행 요약에서 실제 API URL을 확인합니다. 배포 후 `/health/ready`가 PostgreSQL에 접속해 `SELECT 1`을 실행합니다. DB에 연결되면 200, 설정이 빠졌거나 연결에 실패하면 503을 반환합니다.
 
 ## Observability
 
