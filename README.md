@@ -67,3 +67,5 @@ Copilot에 연결할 때 MCP 실행 명령은 현재 Python 인터프리터와 `
 
 - [Copilot Python SDK](https://github.com/github/copilot-sdk/blob/main/python/README.md)
 - [MCP Python SDK](https://py.sdk.modelcontextprotocol.io/v2/)
+
+PostgreSQL에서 `sslmode=verify-full` 또는 `verify-ca`를 사용할 때 별도 CA 설정이 없다면 certifi의 신뢰할 수 있는 CA 묶음을 사용합니다. 연결 문자열의 `sslrootcert`와 환경 변수 `PGSSLROOTCERT`를 우선하며 인증서 및 호스트 이름 검증을 유지합니다.

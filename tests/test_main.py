@@ -58,3 +58,41 @@ def test_openapi_is_available():
     response = client.get("/openapi.json")
     assert response.status_code == 200
     assert "/health/ready" in response.json()["paths"]
+
+
+def test_verified_tls_uses_trusted_ca_bundle(monkeypatch):
+    import certifi
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test:secret@localhost/test?sslmode=verify-full")
+    monkeypatch.delenv("PGSSLROOTCERT", raising=False)
+    connection = AsyncMock()
+    connection.__aenter__.return_value = connection
+    connect = AsyncMock(return_value=connection)
+    monkeypatch.setattr(psycopg.AsyncConnection, "connect", connect)
+
+    assert client.get("/health/ready").status_code == 200
+    assert connect.call_args.kwargs["sslmode"] == "verify-full"
+    assert connect.call_args.kwargs["sslrootcert"] == certifi.where()
+
+
+def test_verified_tls_preserves_explicit_ca_bundle(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test:secret@localhost/test?sslmode=verify-full&sslrootcert=/custom/root.pem")
+    connection = AsyncMock()
+    connection.__aenter__.return_value = connection
+    connect = AsyncMock(return_value=connection)
+    monkeypatch.setattr(psycopg.AsyncConnection, "connect", connect)
+
+    assert client.get("/health/ready").status_code == 200
+    assert connect.call_args.kwargs["sslrootcert"] == "/custom/root.pem"
+
+
+def test_verified_tls_preserves_environment_ca_bundle(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test:secret@localhost/test?sslmode=verify-full")
+    monkeypatch.setenv("PGSSLROOTCERT", "/custom/root.pem")
+    connection = AsyncMock()
+    connection.__aenter__.return_value = connection
+    connect = AsyncMock(return_value=connection)
+    monkeypatch.setattr(psycopg.AsyncConnection, "connect", connect)
+
+    assert client.get("/health/ready").status_code == 200
+    assert "sslrootcert" not in connect.call_args.kwargs
