@@ -13,6 +13,21 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: welfare_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PG_TEST_URL: postgresql://postgres:postgres@localhost:5432/welfare_test
     permissions:
       contents: read #This is required for actions/checkout
 
@@ -36,7 +51,7 @@ jobs:
           python -m pytest tests -q
 
       - name: Package API source
-        run: zip -q python-app.zip main.py mcp_server.py requirements.txt
+        run: zip -qr python-app.zip main.py mcp_server.py requirements.txt welfare -x "*/__pycache__/*" "*.pyc"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -92,6 +107,8 @@ jobs:
           test -n "$APP_URL"
           printf '%s\n' "$APP_URL" >> "$GITHUB_STEP_SUMMARY"
           curl --fail --silent --show-error --location --retry 12 --retry-delay 5 --retry-all-errors --connect-timeout 10 --max-time 30 --output openapi.json "${APP_URL%/}/openapi.json"
-          jq -e '.info.title == "Chungdo API"' openapi.json
+          jq -e '.info.title == "Welfare Next API"' openapi.json
+          curl --fail --silent --show-error --location --retry 12 --retry-delay 5 --retry-all-errors --connect-timeout 10 --max-time 30 --output health.json "${APP_URL%/}/api/health"
+          jq -e '.data.status == "ok"' health.json
           curl --fail --silent --show-error --location --retry 12 --retry-delay 5 --retry-all-errors --connect-timeout 10 --max-time 30 --output readiness.json "${APP_URL%/}/health/ready"
           jq -e '.status == "ok"' readiness.json
