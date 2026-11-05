@@ -14,7 +14,7 @@ from app.safety import mask_data, mask_pii, sanitize_user_input
 
 INSTRUCTIONS = Path(__file__).parent / "agents/instructions"
 AGENTS = {"RejectionInterpreter", "PolicyMatcher", "PathPlanner", "Followup"}
-JSON_RETRY = "직전 출력이 JSON 형식을 어겼습니다. 지정된 JSON 객체만 다시 출력하세요."
+JSON_RETRY = (INSTRUCTIONS / "json_retry.txt").read_text().strip()
 
 
 def instructions_for(agent: str) -> str:

@@ -435,6 +435,11 @@ def test_agent_tools_are_scoped_to_known_policy_ids(api):
     from copilot.tools import ToolInvocation
 
     navigation_id = create(api).json()["data"]["id"]
+    api.portal.call(
+        app.state.db.query,
+        "UPDATE navigations SET status='running' WHERE id=%s",
+        (navigation_id,),
+    )
     policy = api.portal.call(
         app.state.navigations.policies.get, "demo-rejected-housing"
     )
@@ -456,3 +461,9 @@ def test_agent_tools_are_scoped_to_known_policy_ids(api):
         ToolInvocation(tool_name=tool.name, arguments={"policy_id": "unknown-policy"}),
     )
     assert blocked.result_type == "failure"
+    recorded = api.portal.call(
+        app.state.db.query,
+        "SELECT content FROM agent_steps WHERE navigation_id=%s",
+        (navigation_id,),
+    )
+    assert any(row["content"]["data"]["args"].get("rejected") for row in recorded)

@@ -140,6 +140,8 @@ class NavigationsService:
         async def handler(invocation):
             args = invocation.arguments or {}
             try:
+                if invocation.tool_name not in names:
+                    raise ValueError("허용된 도구가 아닙니다")
                 if (
                     "profile" in args
                     and Profile.model_validate(args["profile"]) != profile
@@ -172,6 +174,14 @@ class NavigationsService:
                     )
                 )
             except (ValueError, TypeError, HTTPException):
+                await self.tool_event(
+                    navigation_id,
+                    agent,
+                    invocation.tool_name
+                    if invocation.tool_name in names
+                    else "unavailable_tool",
+                    {"rejected": True},
+                )
                 return ToolResult(
                     result_type="failure",
                     text_result_for_llm="허용된 검색 범위·후보·프로필만 사용하세요",

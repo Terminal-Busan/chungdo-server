@@ -94,6 +94,19 @@ def fallback_explanation(policy, notice, criteria):
 
 def validate_explanation(answer, policy, notice, criteria, context):
     corrected = fallback_explanation(policy, notice, criteria)
+    for actual in corrected.failed_criteria:
+        exact = next(
+            (
+                entry
+                for entry in answer.failed_criteria
+                if entry.criterion == actual.criterion
+                and entry.user_value == actual.user_value
+                and entry.required_value == actual.required_value
+            ),
+            None,
+        )
+        if exact:
+            actual.explanation = grounded_summary(exact.explanation, context)
     # Never accept model eligibility values, including fabricated fail entries.
     summary = grounded_summary(answer.plain_summary, context)
     if "소득" in summary and "입력하신 월 소득 기준 추정" not in summary:

@@ -6,7 +6,16 @@ from app.safety import mask_pii
 
 @pytest.mark.parametrize(
     "private",
-    ["990101-1234567", "9901011234567", "010-1234-5678", "01012345678", "02-123-4567"],
+    [
+        "990101-1234567",
+        "9901011234567",
+        "010-1234-5678",
+        "01012345678",
+        "02-123-4567",
+        "성명: 홍길동",
+        "주소: 경상북도 청도군 청도로 123",
+        "역삼동123-4",
+    ],
 )
 def test_masking(private):
     assert private not in mask_pii("통지 " + private)
