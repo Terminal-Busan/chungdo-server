@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - chungdo-server-dev
+name: Test and deploy FastAPI app to Azure Web App - chungdo-server-dev
 
 on:
   workflow_dispatch:
@@ -19,30 +19,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '24.x'
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
-      - name: Install, build, and test
+      - name: Install and test
         run: |
-          npm ci
-          rm -f tsconfig.build.tsbuildinfo
-          npm run build
-          npm test
-          npm run test:e2e
+          python -m pip install -r requirements-dev.txt
+          python -m pip check
+          python -m pytest tests -q
 
-      - name: Package API
-        run: |
-          npm prune --omit=dev
-          npm pkg set 'scripts.start=node dist/main.js'
-          zip -qry node-app.zip dist package.json node_modules
+      - name: Package API source
+        run: zip -q python-app.zip main.py requirements.txt
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
-          name: node-app
-          path: node-app.zip
+          name: python-app
+          path: python-app.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -55,7 +54,7 @@ jobs:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
-          name: node-app
+          name: python-app
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -64,13 +63,24 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_44C026D7B86D4CB297DD8680ECD0D0D8 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CD976AD694274B32AD710444E005CC97 }}
 
+      - name: Configure Python runtime and source build
+        shell: bash
+        run: |
+          set -euo pipefail
+          resource_group=$(az webapp list --query "[?name=='chungdo-server-dev'].resourceGroup | [0]" --output tsv)
+          test -n "$resource_group"
+          test "$resource_group" != "None"
+          az webapp config set --resource-group "$resource_group" --name chungdo-server-dev --linux-fx-version 'PYTHON|3.14' --startup-file 'python -m uvicorn main:app --host 0.0.0.0 --port 8000' --output none
+          az webapp config appsettings delete --resource-group "$resource_group" --name chungdo-server-dev --setting-names WEBSITE_RUN_FROM_PACKAGE --output none
+          az webapp config appsettings set --resource-group "$resource_group" --name chungdo-server-dev --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true --output none
+
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'chungdo-server-dev'
           slot-name: 'Production'
-          package: node-app.zip
+          package: python-app.zip
 
       - name: Verify deployment and report URL
         env:
@@ -78,4 +88,5 @@ jobs:
         run: |
           test -n "$APP_URL"
           printf '%s\n' "$APP_URL" >> "$GITHUB_STEP_SUMMARY"
+          curl --fail --silent --show-error --location --retry 10 --retry-delay 5 --retry-all-errors --max-time 20 "${APP_URL%/}/openapi.json" | jq -e '.info.title == "Chungdo API"'
           curl --fail --silent --show-error --location --retry 10 --retry-delay 5 --retry-all-errors --max-time 20 "${APP_URL%/}/health/ready" | jq -e '.status == "ok"'

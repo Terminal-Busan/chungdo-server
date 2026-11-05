@@ -1,109 +1,46 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Chungdo API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Python 3.14 기반 FastAPI 서버입니다.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## 로컬 실행
 
 ```bash
-$ npm install
+python3.14 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+cp .env.example .env
+python -m uvicorn main:app --reload --port 3001 --env-file .env
 ```
 
-## Compile and run the project
+`.env`에 PostgreSQL `DATABASE_URL`을 설정합니다. Azure PostgreSQL 연결에는 `sslmode=verify-full`을 사용합니다. API 문서는 `/docs`에서 확인할 수 있습니다.
+
+## API
+
+- `GET /`는 기존과 동일하게 `Hello World!` 텍스트를 반환합니다.
+- `GET /health/ready`는 PostgreSQL에 연결해 `SELECT 1`을 실행합니다. 성공하면 `200 {"status":"ok"}`, 설정이 없거나 연결이 실패하면 503을 반환합니다. 연결과 쿼리는 각각 5초 제한을 적용합니다.
+- `GET /openapi.json`은 API 명세를 반환합니다.
+
+## 검증
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+python -m pytest tests -q
+python -m pip check
 ```
 
-## Run tests
+DB 성공·실패 테스트는 연결을 대체해 실행합니다. 실제 PostgreSQL 연결은 배포 후 준비 상태 검사에서 검증합니다.
 
-```bash
-# unit tests
-$ npm run test
+## Azure 배포
 
-# e2e tests
-$ npm run test:e2e
+GitHub Actions의 `Test and deploy FastAPI app to Azure Web App - chungdo-server-dev`를 수동 실행합니다. 기본 브랜치 또는 배포하려는 브랜치를 선택합니다.
 
-# test coverage
-$ npm run test:cov
+워크플로는 Python 3.14에서 테스트하고 `main.py`와 `requirements.txt`를 ZIP으로 묶습니다. 기존 Azure OIDC 시크릿으로 로그인한 뒤, `chungdo-server-dev`의 Python 버전과 시작 명령을 설정하고 Azure에서 의존성을 설치하도록 구성합니다.
+
+```text
+런타임: PYTHON|3.14
+시작 명령: python -m uvicorn main:app --host 0.0.0.0 --port 8000
+SCM_DO_BUILD_DURING_DEPLOYMENT=true
 ```
 
-## Azure 데모 배포
+App Service에는 기존 PostgreSQL의 `DATABASE_URL`이 필요하며, DB 네트워크에서 App Service 연결을 허용해야 합니다. 배포 과정에서 기존 환경 변수는 유지합니다. 배포 후 `/openapi.json`으로 FastAPI 실행을 확인하고 `/health/ready`로 DB 연결을 확인합니다. 실패하면 Actions와 App Service 로그 스트림에서 확인합니다.
 
-GitHub Actions 탭에서 **Run workflow**를 누르면 빌드하고 테스트한 API를 기존 `chungdo-server-dev` App Service에 배포합니다.
-
-- 기존 Azure OIDC 시크릿과 연동된 Linux App Service에 Node.js 24를 선택합니다. 시작 명령을 지정하는 경우 `npm start`를 사용합니다. 빌드가 끝난 ZIP을 배포하므로 App Service의 배포 시 빌드는 끕니다.
-- App Service의 환경 변수에 기존 PostgreSQL의 `DATABASE_URL`을 등록합니다. Azure PostgreSQL의 연결 문자열에는 `sslmode=verify-full`을 사용하고 App Service에서 DB에 접근할 수 있도록 네트워크를 구성합니다.
-- Actions 실행 요약에서 실제 API URL을 확인합니다. 배포 후 `/health/ready`가 PostgreSQL에 접속해 `SELECT 1`을 실행합니다. DB에 연결되면 200, 설정이 빠졌거나 연결에 실패하면 503을 반환합니다.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+`src/`의 TypeScript 소스와 기존 npm 설정은 이전 구현 참조용으로 남아 있습니다. 현재 Azure 배포 진입점은 루트의 `main.py`입니다.
