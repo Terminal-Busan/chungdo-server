@@ -6,11 +6,11 @@ import os
 import certifi
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
-from fastapi import FastAPI
+from welfare.api import create_app
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Chungdo API", version="0.0.1")
+app = create_app()
 
 
 @app.get("/", response_class=PlainTextResponse)

@@ -58,3 +58,6 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 *.egg-info/
+
+# Local development database
+/welfare.db*
