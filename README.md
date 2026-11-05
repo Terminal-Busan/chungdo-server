@@ -132,6 +132,16 @@ python -m uvicorn main:app --reload --port 8000 --env-file .env
 
 ### AI 및 세션 처리
 
+### 배포 전 확인과 모니터링
+
+`APPLICATIONINSIGHTS_CONNECTION_STRING`을 설정하면 공식 Azure Monitor exporter로 `welfare.http.duration`과 `welfare.agent.duration` 집계 지표를 전송합니다. 히스토그램의 count·상태코드·outcome으로 요청 수, 오류 수, 에이전트 지연·폴백·타임아웃을 확인합니다. 속성은 경로 템플릿, HTTP 메서드·상태코드, 에이전트 이름·결과만 사용합니다. 실제 URL·쿼리·세션ID·헤더·본문·모델 응답·예외 원문은 수집하지 않으며 자동 계측과 디스크 재시도 저장을 사용하지 않습니다. 미설정이면 비활성화되며 모니터링 오류는 API 기능에 영향을 주지 않습니다. 실제 Azure 수신 확인에는 별도 연결 문자열이 필요합니다.
+
+배포 워크플로는 선택적으로 등록한 `DATABASE_URL`, `GOV24_API_KEY` 또는 `GOV24_SERVICE_KEY`, `APPLICATIONINSIGHTS_CONNECTION_STRING` secrets와 `FRONT_URL` variable도 Azure에 전달합니다. 비어 있는 설정은 기존 Azure 값을 지우지 않습니다. 운영 DB 초기화·정부24 동기화는 접속정보를 준비한 뒤 위 명시적 CLI로 수행해야 합니다.
+
+AI 검증 모드는 임시 PostgreSQL에서 실제 Copilot으로 사유해석 → 정책매칭 → 경로설계 → 후속 질문을 실행하고 SSE·저장·삭제를 검사합니다. 정책은 `seed/demo.json`의 명시적 데모이며 정부24 실데이터 검증을 대신하지 않습니다. 실제 DB와 정부24 키 없이 운영 데이터 연동 완료로 판단하지 않습니다.
+
+프론트 원격 `main`의 `component/welfare-api.ts`는 아직 `POST /api/welfare/analyze` 및 camelCase 응답을 사용합니다. 합의된 백엔드는 `POST /api/navigations` → `GET /api/navigations/{id}/stream` → 결과 조회 흐름과 `data` envelope·snake_case 필드를 사용합니다. 프론트 담당자가 `docs/API.md`에 맞춰 정책ID·프로필·동의 입력, SSE 처리, 결과·질문·삭제를 연결해야 합니다. 백엔드의 공식 계약과 프론트 소스는 변경하지 않습니다.
+
 배포용 토큰은 GitHub 저장소 Settings → Secrets and variables → Actions에 `COPILOT_GITHUB_TOKEN` 이름의 Repository secret으로 등록합니다. 개인 계정 소유의 fine-grained 토큰에 `Copilot Requests` 권한과 해당 계정의 Copilot 이용 권한이 필요합니다. 선택 사항인 Repository variable `COPILOT_MODEL`로 사용할 모델을 지정할 수 있습니다. 토큰은 코드·ZIP·로그에 넣지 않습니다.
 
 Actions의 기존 배포 워크플로에서 `verify_ai_only`를 선택하면 서버 배포 없이 같은 SDK 어댑터로 실제 AI 응답만 확인합니다. 작업 브랜치에서 실행할 때는 항상 이 검증만 수행하고, 실제 배포는 `main`에서만 허용합니다. 성공 로그와 실행 요약에 `Copilot 실제 호출 확인 완료`가 표시돼야 인증·모델 호출 성공으로 판단합니다.

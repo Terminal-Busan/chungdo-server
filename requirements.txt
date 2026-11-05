@@ -8,3 +8,5 @@ aiosqlite==0.22.1
 httpx==0.28.1
 certifi==2026.10.23
 python-dotenv==1.2.4
+azure-monitor-opentelemetry-exporter==1.0.0b58
+opentelemetry-sdk==1.45.2

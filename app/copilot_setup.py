@@ -51,6 +51,16 @@ def configure_azure(resource_group, app_name):
     model = os.getenv("COPILOT_MODEL", "").strip()
     if model:
         settings["COPILOT_MODEL"] = model
+    # Preserve existing Azure values unless an explicit non-empty setting is supplied.
+    for name in (
+        "DATABASE_URL",
+        "GOV24_API_KEY",
+        "GOV24_SERVICE_KEY",
+        "APPLICATIONINSIGHTS_CONNECTION_STRING",
+        "FRONT_URL",
+    ):
+        if value := os.getenv(name, "").strip():
+            settings[name] = value
     # mode 0600, automatic deletion; no secret in process arguments or source ZIP.
     with NamedTemporaryFile(mode="w+", suffix=".json") as file:
         json.dump(settings, file)

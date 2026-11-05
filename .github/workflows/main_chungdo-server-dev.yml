@@ -23,6 +23,19 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: welfare_live_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,15 +45,18 @@ jobs:
           cache-dependency-path: requirements.txt
       - name: Prepare Copilot runtime
         run: |
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-dev.txt
           python -m copilot download-runtime
       - name: Verify real AI response without deployment
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/welfare_live_test
+          WELFARE_RUN_LIVE_AI: 'true'
         run: |
           python -m app.copilot_setup check
-          printf '%s\n' 'Copilot 실제 호출 확인 완료 (배포 없음)' >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/test_welfare.py -q -k live_copilot
+          printf '%s\n' '실제 Copilot 3개 에이전트·후속 질문·SSE·삭제 확인 완료 (격리된 테스트 DB·데모 정책, 배포 없음)' >> "$GITHUB_STEP_SUMMARY"
 
   build:
     if: github.ref == 'refs/heads/main' && !inputs.verify_ai_only
@@ -120,6 +136,11 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOV24_API_KEY: ${{ secrets.GOV24_API_KEY }}
+          GOV24_SERVICE_KEY: ${{ secrets.GOV24_SERVICE_KEY }}
+          APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
+          FRONT_URL: ${{ vars.FRONT_URL }}
         run: |
           set -euo pipefail
           resource_group=$(az webapp list --query "[?name=='chungdo-server-dev'].resourceGroup | [0]" --output tsv)
