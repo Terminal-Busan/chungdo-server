@@ -1,9 +1,27 @@
 import asyncio
+import os
 
 import httpx
 import pytest
 
 from app.policies.gov24 import Gov24Client, Gov24Error, normalize_policy
+
+
+@pytest.mark.skipif(os.getenv("WELFARE_RUN_LIVE_GOV24") != "true", reason="Explicit live Gov24 integration only")
+def test_live_gov24_list_detail_and_conditions():
+    async def run():
+        client = Gov24Client()
+        rows = await client.fetch("serviceList", per_page=1)
+        assert rows, "Official policy list was empty"
+        policy_id = str(rows[0]["서비스ID"])
+        detail = await client.fetch("serviceDetail", policy_id=policy_id, per_page=1)
+        conditions = await client.fetch("supportConditions", policy_id=policy_id, per_page=1)
+        assert detail and str(detail[0]["서비스ID"]) == policy_id
+        assert conditions and str(conditions[0]["서비스ID"]) == policy_id
+        policy = normalize_policy({**rows[0], **detail[0]}, conditions[0])
+        assert policy["is_demo"] is False and policy["id"] == policy_id
+        assert policy["name"]
+    asyncio.run(run())
 
 
 def test_official_request_auth_filter_and_response(monkeypatch):

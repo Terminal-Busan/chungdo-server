@@ -5,13 +5,74 @@ name: Test and deploy FastAPI app to Azure Web App - chungdo-server-dev
 
 on:
   workflow_dispatch:
+    inputs:
+      verify_ai_only:
+        description: 'Copilot 실제 호출만 확인 (서버 배포 없음)'
+        type: boolean
+        default: false
+      verify_gov24_only:
+        description: '정부24 실제 API 호출만 확인 (AI 호출·서버 배포 없음)'
+        type: boolean
+        default: false
 
 concurrency:
   group: chungdo-server-dev
   cancel-in-progress: false
 
 jobs:
+  verify-ai:
+    # A work branch must never deploy while testing a new secret.
+    if: inputs.verify_ai_only || inputs.verify_gov24_only || github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: welfare_live_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Prepare Copilot runtime
+        run: |
+          python -m pip install -r requirements-dev.txt
+          if [ '${{ inputs.verify_gov24_only }}' != 'true' ]; then python -m copilot download-runtime; fi
+      - name: Verify real AI response without deployment
+        if: '!inputs.verify_gov24_only'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/welfare_live_test
+          WELFARE_RUN_LIVE_AI: 'true'
+        run: |
+          python -m app.copilot_setup check
+          python -m pytest tests/test_welfare.py -q -k live_copilot
+          printf '%s\n' '실제 Copilot 3개 에이전트·후속 질문·SSE·삭제 확인 완료 (격리된 테스트 DB·데모 정책, 배포 없음)' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify official Gov24 endpoints
+        if: always()
+        env:
+          GOV24_API_KEY: ${{ secrets.GOV24_API_KEY }}
+          GOV24_SERVICE_KEY: ${{ secrets.GOV24_SERVICE_KEY }}
+          WELFARE_RUN_LIVE_GOV24: 'true'
+        run: |
+          python -m pytest tests/test_gov24.py -q -k live_gov24
+
   build:
+    if: github.ref == 'refs/heads/main' && !inputs.verify_ai_only && !inputs.verify_gov24_only
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -69,6 +130,8 @@ jobs:
       contents: read #This is required for actions/checkout
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
@@ -83,12 +146,21 @@ jobs:
 
       - name: Configure Python runtime and source build
         shell: bash
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOV24_API_KEY: ${{ secrets.GOV24_API_KEY }}
+          GOV24_SERVICE_KEY: ${{ secrets.GOV24_SERVICE_KEY }}
+          APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
+          FRONT_URL: ${{ vars.FRONT_URL }}
         run: |
           set -euo pipefail
           resource_group=$(az webapp list --query "[?name=='chungdo-server-dev'].resourceGroup | [0]" --output tsv)
           test -n "$resource_group"
           test "$resource_group" != "None"
-          az webapp config set --resource-group "$resource_group" --name chungdo-server-dev --linux-fx-version 'PYTHON|3.14' --startup-file 'python -m uvicorn main:app --host 0.0.0.0 --port 8000' --output none
+          python -m app.copilot_setup configure-azure --resource-group "$resource_group" --app-name chungdo-server-dev
+          az webapp config set --resource-group "$resource_group" --name chungdo-server-dev --linux-fx-version 'PYTHON|3.14' --output none
           az webapp config appsettings delete --resource-group "$resource_group" --name chungdo-server-dev --setting-names WEBSITE_RUN_FROM_PACKAGE --output none
           az webapp config appsettings set --resource-group "$resource_group" --name chungdo-server-dev --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true --output none
 
@@ -99,6 +171,15 @@ jobs:
           app-name: 'chungdo-server-dev'
           slot-name: 'Production'
           package: python-app.zip
+
+      - name: Enable Copilot startup verification after source deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          resource_group=$(az webapp list --query "[?name=='chungdo-server-dev'].resourceGroup | [0]" --output tsv)
+          test -n "$resource_group"
+          test "$resource_group" != "None"
+          az webapp config set --resource-group "$resource_group" --name chungdo-server-dev --startup-file 'python -m copilot download-runtime && python -m app.copilot_setup check && python -m uvicorn main:app --host 0.0.0.0 --port 8000' --output none
 
       - name: Verify deployment and report URL
         shell: bash

@@ -25,6 +25,29 @@ from main import app
 from tests.test_eligibility import PROFILE
 
 
+@pytest.mark.skipif(os.getenv("WELFARE_RUN_LIVE_AI") != "true", reason="Explicit real Copilot integration only")
+def test_live_copilot_three_agents_and_followup(api):
+    from app.ai import CopilotService
+
+    app.state.navigations.ai = CopilotService()
+    response = create(api, rejection_text="월 소득 기준을 초과했다는 데모 통지를 받았습니다.")
+    assert response.status_code == 201
+    identifier = response.json()["data"]["id"]
+    _, events = execute(api, identifier)
+    assert not [data["agent"] for event, data in events if event == "error"], "Live agent emitted a fallback/error"
+    completed = [data["agent"] for event, data in events if event == "step" and data["status"] == "completed"]
+    assert completed == ["RejectionInterpreter", "PolicyMatcher", "PathPlanner"]
+    final = api.get(f"/api/navigations/{identifier}").json()["data"]
+    assert final["status"] == "done"
+    assert final["result"]["rejection"]["ai_generated"] is True
+    assert "데모" in final["result"]["disclaimer"]
+    assert [data for event, data in events if event == "result"] == [final["result"]]
+    question = api.post(f"/api/navigations/{identifier}/questions", json={"question": "신청처에서 무엇을 확인해야 하나요?"})
+    assert question.status_code == 200 and question.json()["data"]["ai_generated"] is True
+    assert api.delete(f"/api/navigations/{identifier}").json()["data"]["deleted"] is True
+    assert api.get(f"/api/navigations/{identifier}").status_code == 404
+
+
 class OfflineAI:
     async def generate(self, *args, **kwargs):
         raise AIUnavailable("offline")

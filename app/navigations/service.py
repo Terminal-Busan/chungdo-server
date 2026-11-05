@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from app import telemetry
 from app.ai import AIUnavailable, CopilotService
 from app.db import Database
 from app.guidance.service import GuidanceService
@@ -230,33 +231,37 @@ class NavigationsService:
         return tools
 
     async def stage(self, navigation_id, agent, operation, fallback):
-        await self.emit(navigation_id, "step", {"agent": agent, "status": "started"})
-        try:
-            async with asyncio.timeout(self.stage_timeout):
-                output = await operation()
-        except (TimeoutError, AIUnavailable, HTTPException) as error:
-            await self.emit(
-                navigation_id,
-                "error",
-                {
-                    "agent": agent,
-                    "message": "timeout"
-                    if isinstance(error, TimeoutError)
-                    else "단계 분석을 완료하지 못해 규칙 결과로 안내합니다",
-                    "fallback": True,
-                },
-            )
-            output = fallback()
-        if agent == "RejectionInterpreter":
-            summary = output[0].plain_summary
-            for start in range(0, len(summary), 30):
+        with telemetry.agent_stage(agent) as observation:
+            await self.emit(navigation_id, "step", {"agent": agent, "status": "started"})
+            try:
+                async with asyncio.timeout(self.stage_timeout):
+                    output = await operation()
+                if observation["outcome"] == "error":
+                    observation["outcome"] = "success"
+            except (TimeoutError, AIUnavailable, HTTPException) as error:
                 await self.emit(
                     navigation_id,
-                    "token",
-                    {"agent": agent, "delta": summary[start : start + 30]},
+                    "error",
+                    {
+                        "agent": agent,
+                        "message": "timeout"
+                        if isinstance(error, TimeoutError)
+                        else "단계 분석을 완료하지 못해 규칙 결과로 안내합니다",
+                        "fallback": True,
+                    },
                 )
-        await self.emit(navigation_id, "step", {"agent": agent, "status": "completed"})
-        return output
+                output = fallback()
+                observation["outcome"] = "timeout" if isinstance(error, TimeoutError) else "fallback"
+            if agent == "RejectionInterpreter":
+                summary = output[0].plain_summary
+                for start in range(0, len(summary), 30):
+                    await self.emit(
+                        navigation_id,
+                        "token",
+                        {"agent": agent, "delta": summary[start : start + 30]},
+                    )
+            await self.emit(navigation_id, "step", {"agent": agent, "status": "completed"})
+            return output
 
     async def run(self, navigation_id):
         try:
@@ -335,6 +340,7 @@ class NavigationsService:
                         self.tools(navigation_id, "PolicyMatcher", {}, profile, search),
                     )
                 except AIUnavailable:
+                    telemetry.note_fallback()
                     await self.emit(
                         navigation_id,
                         "error",

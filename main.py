@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from psycopg.conninfo import conninfo_to_dict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app import telemetry
 from app.db import Database
 from app.navigations.router import router as navigations_router
 from app.navigations.service import NavigationsService
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    telemetry.configure()
     app.state.db = Database()
     app.state.navigations = NavigationsService(app.state.db)
 
@@ -49,6 +51,7 @@ async def lifespan(app: FastAPI):
         with suppress(asyncio.CancelledError):
             await janitor
         await app.state.navigations.close()
+        await telemetry.shutdown()
 
 
 app = FastAPI(
@@ -77,6 +80,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Last-Event-ID"],
 )
+app.add_middleware(telemetry.MetricsMiddleware)
 app.include_router(policies_router)
 app.include_router(navigations_router)
 
