@@ -69,6 +69,8 @@ jobs:
       contents: read #This is required for actions/checkout
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
@@ -83,12 +85,16 @@ jobs:
 
       - name: Configure Python runtime and source build
         shell: bash
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
         run: |
           set -euo pipefail
           resource_group=$(az webapp list --query "[?name=='chungdo-server-dev'].resourceGroup | [0]" --output tsv)
           test -n "$resource_group"
           test "$resource_group" != "None"
-          az webapp config set --resource-group "$resource_group" --name chungdo-server-dev --linux-fx-version 'PYTHON|3.14' --startup-file 'python -m uvicorn main:app --host 0.0.0.0 --port 8000' --output none
+          python -m app.copilot_setup configure-azure --resource-group "$resource_group" --app-name chungdo-server-dev
+          az webapp config set --resource-group "$resource_group" --name chungdo-server-dev --linux-fx-version 'PYTHON|3.14' --output none
           az webapp config appsettings delete --resource-group "$resource_group" --name chungdo-server-dev --setting-names WEBSITE_RUN_FROM_PACKAGE --output none
           az webapp config appsettings set --resource-group "$resource_group" --name chungdo-server-dev --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true --output none
 
@@ -99,6 +105,15 @@ jobs:
           app-name: 'chungdo-server-dev'
           slot-name: 'Production'
           package: python-app.zip
+
+      - name: Enable Copilot startup verification after source deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          resource_group=$(az webapp list --query "[?name=='chungdo-server-dev'].resourceGroup | [0]" --output tsv)
+          test -n "$resource_group"
+          test "$resource_group" != "None"
+          az webapp config set --resource-group "$resource_group" --name chungdo-server-dev --startup-file 'python -m copilot download-runtime && python -m app.copilot_setup check && python -m uvicorn main:app --host 0.0.0.0 --port 8000' --output none
 
       - name: Verify deployment and report URL
         shell: bash

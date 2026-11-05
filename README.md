@@ -132,6 +132,10 @@ python -m uvicorn main:app --reload --port 8000 --env-file .env
 
 ### AI 및 세션 처리
 
+배포용 토큰은 GitHub 저장소 Settings → Secrets and variables → Actions에 `COPILOT_GITHUB_TOKEN` 이름의 Repository secret으로 등록합니다. 개인 계정 소유의 fine-grained 토큰에 `Copilot Requests` 권한과 해당 계정의 Copilot 이용 권한이 필요합니다. 선택 사항인 Repository variable `COPILOT_MODEL`로 사용할 모델을 지정할 수 있습니다. 토큰은 코드·ZIP·로그에 넣지 않습니다.
+
+배포 워크플로가 토큰을 Azure App Service 환경변수로 전달합니다. GitHub secret이 비어 있으면 Azure에 이미 등록된 `COPILOT_GITHUB_TOKEN` 또는 `GITHUB_TOKEN`을 유지하며, 양쪽 모두 없으면 배포 설정 변경 전에 중단합니다. 서버 시작 명령은 SDK 런타임 준비 → `python -m app.copilot_setup check`로 실제 모델 응답 확인 → API 실행 순서입니다. 인증·모델·네트워크 오류가 있으면 API 시작과 배포 검증이 실패하므로 단순 health 성공을 AI 연결 성공으로 오인하지 않습니다. 이 시작 점검은 서버 재시작마다 짧은 모델 요청 1회를 사용합니다. 서버 실행 중 외부 AI 장애에는 기존 규칙 기반 폴백을 유지합니다.
+
 서버에 `COPILOT_GITHUB_TOKEN`(또는 `GITHUB_TOKEN`)과 `COPILOT_MODEL`을 설정합니다. 모델 이름은 계정에서 사용 가능한 모델로 지정하세요. MAF나 별도 AI 서버를 추가하지 않고 설치된 Copilot SDK를 직접 호출합니다. 에이전트 도구는 현재 분석의 정책 캐시 조회·규칙 판정만 허용하고, 기본 파일·셸·외부 쓰기 도구는 노출하지 않습니다. AI는 사유·추천 이유·행동·경로의 구조화된 JSON을 반환하며, 서버가 판정값·출처·후보ID·서류·신청방법·순서를 검증하고 교정합니다.
 
 모델 출력은 Pydantic으로 검증하고 JSON 오류 시 1회 재시도합니다. 에이전트 단계마다 DB 검색·도구 처리·모델 호출을 포함해 45초 제한을 적용하고, 초과 시 SSE `error`와 안전한 폴백을 제공한 뒤 다음 단계로 진행합니다. 검증되지 않은 모델 토큰과 내부 추론은 클라이언트에 내보내지 않으며, 검증된 사유 설명을 `token` 이벤트로 전달합니다. AI 미사용 폴백은 `ai_generated: false`로 구분합니다.
