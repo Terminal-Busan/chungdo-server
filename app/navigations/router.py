@@ -38,13 +38,20 @@ async def create_navigation(body: CreateNavigation, request: Request):
 
 @router.get("/{id}/stream", response_class=StreamingResponse)
 async def stream_navigation(id: UUID, request: Request):
+    cursor = request.headers.get("Last-Event-ID", "0")
+    try:
+        cursor = int(cursor)
+        if cursor < 0:
+            raise ValueError("negative cursor")
+    except ValueError:
+        raise HTTPException(400, "Last-Event-ID 값이 올바르지 않습니다") from None
     service = request.app.state.navigations
     navigation_id = str(id)
     already_done = (await service.get(navigation_id))["status"] == "done"
     await service.start(navigation_id)
 
     async def stream():
-        after = 0
+        after = cursor
         last_heartbeat = time.monotonic()
         try:
             while True:

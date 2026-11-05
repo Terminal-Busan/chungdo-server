@@ -55,7 +55,8 @@ class CopilotService:
     ):
         token = os.getenv("COPILOT_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
         model = os.getenv("COPILOT_MODEL")
-        if not token or not model:
+        local_login = os.getenv("COPILOT_ENABLED", "false").lower() == "true"
+        if not token and not local_login:
             raise AIUnavailable("AI 연결 설정이 필요합니다")
         from copilot import CopilotClient
         from copilot.rpc import PermissionDecisionReject
@@ -76,7 +77,7 @@ class CopilotService:
                 with TemporaryDirectory(prefix="welfare-copilot-") as directory:
                     client = CopilotClient(
                         github_token=token,
-                        use_logged_in_user=False,
+                        use_logged_in_user=not bool(token),
                         mode="empty",
                         base_directory=directory,
                         working_directory=directory,

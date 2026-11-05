@@ -14,7 +14,7 @@ class Gov24Client:
     base_url = "https://api.odcloud.kr/api/gov24/v3"
 
     async def fetch(self, resource: str, *, page=1, per_page=100, policy_id=None):
-        key = os.getenv("GOV24_API_KEY")
+        key = os.getenv("GOV24_API_KEY") or os.getenv("GOV24_SERVICE_KEY")
         if not key:
             raise Gov24Error("정부24 인증키 설정이 필요합니다")
         params = {"page": page, "perPage": per_page, "returnType": "JSON"}

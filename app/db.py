@@ -3,8 +3,10 @@
 import os
 from pathlib import Path
 
+import certifi
 import psycopg
 from fastapi import HTTPException
+from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -17,10 +19,14 @@ class Database:
         if not self.url:
             raise HTTPException(503, "데이터베이스 연결 설정이 필요합니다")
         try:
+            options = conninfo_to_dict(self.url)
+            ssl_mode = options.get("sslmode", os.getenv("PGSSLMODE"))
+            if ssl_mode in {"verify-ca", "verify-full"} and "sslrootcert" not in options and not os.getenv("PGSSLROOTCERT"):
+                options["sslrootcert"] = certifi.where()
+            options["connect_timeout"] = 5
             async with await psycopg.AsyncConnection.connect(
-                self.url,
                 row_factory=dict_row,
-                connect_timeout=5,
+                **options,
             ) as connection:
                 await connection.execute("SET LOCAL statement_timeout = '10s'")
                 cursor = (

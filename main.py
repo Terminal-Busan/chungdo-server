@@ -5,12 +5,14 @@ import logging
 import os
 from contextlib import asynccontextmanager, suppress
 
+import certifi
 import psycopg
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse
+from psycopg.conninfo import conninfo_to_dict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.db import Database
@@ -50,7 +52,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Chungdo API",
+    title="Welfare Next API",
     version="0.0.1",
     lifespan=lifespan,
     responses={
@@ -77,6 +79,14 @@ app.add_middleware(
 )
 app.include_router(policies_router)
 app.include_router(navigations_router)
+
+
+@app.middleware("http")
+async def private_responses(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/navigations"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def contract_openapi():
@@ -139,10 +149,20 @@ async def readiness() -> dict[str, str] | JSONResponse:
     connection_string = os.environ.get("DATABASE_URL")
     if connection_string:
         try:
+            connection_options = conninfo_to_dict(connection_string)
+            ssl_mode = connection_options.get("sslmode", os.environ.get("PGSSLMODE"))
+            if (
+                ssl_mode in {"verify-ca", "verify-full"}
+                and "sslrootcert" not in connection_options
+                and not os.environ.get("PGSSLROOTCERT")
+            ):
+                connection_options["sslrootcert"] = certifi.where()
+            connection_options["connect_timeout"] = 5
+            connection_options["options"] = (
+                connection_options.get("options", "") + " -c statement_timeout=5000"
+            ).strip()
             async with await psycopg.AsyncConnection.connect(
-                connection_string,
-                connect_timeout=5,
-                options="-c statement_timeout=5000",
+                **connection_options,
             ) as connection:
                 await connection.execute("SELECT 1")
             return {"status": "ok"}
