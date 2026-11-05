@@ -1,5 +1,24 @@
 # Welfare Next API
 
+## Docker로 백엔드 실행
+
+서버 저장소 루트에서 실행합니다. 환경변수와 인증키는 이미지에 포함하지 않고 실행 시 전달합니다.
+
+```bash
+docker build -t welfare-next-backend .
+docker run --rm --env-file .env -p 8000:8000 welfare-next-backend
+```
+
+이미지 빌드 시 Copilot 런타임까지 준비하고 일반 사용자 권한으로 API를 실행합니다. DB는 별도 PostgreSQL을 사용하며 `DATABASE_URL`은 컨테이너에서 접근 가능한 주소여야 합니다. DB 초기화·정부24 동기화가 필요하면 설정을 준비한 뒤 각각 실행합니다.
+
+```bash
+docker run --rm --env-file .env welfare-next-backend python -m app.sync_gov24 --init --init-only
+docker run --rm --env-file .env welfare-next-backend python -m app.sync_gov24
+docker run --rm --env-file .env welfare-next-backend python -m app.copilot_setup check
+```
+
+`/api/health`는 생존 확인, `/health/ready`는 DB 연결 확인입니다. 기존 App Service ZIP 배포 설정은 그대로 사용하며, 이미지 배포를 선택할 때는 이 Dockerfile로 별도로 빌드합니다.
+
 FastAPI 서버이며 [API 계약](docs/API.md)의 8개 엔드포인트를 구현합니다. Swagger는 `/docs`에서 확인합니다.
 
 ## 로컬 실행
