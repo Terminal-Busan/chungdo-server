@@ -1,3 +1,5 @@
 fastapi==0.162.0
 uvicorn[standard]==0.54.0
 psycopg[binary]==3.3.8
+github-copilot-sdk==1.0.28
+mcp==2.3.0

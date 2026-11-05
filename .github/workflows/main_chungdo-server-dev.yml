@@ -32,10 +32,11 @@ jobs:
         run: |
           python -m pip install -r requirements-dev.txt
           python -m pip check
+          python -c "from copilot import CopilotClient"
           python -m pytest tests -q
 
       - name: Package API source
-        run: zip -q python-app.zip main.py requirements.txt
+        run: zip -q python-app.zip main.py mcp_server.py requirements.txt
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
